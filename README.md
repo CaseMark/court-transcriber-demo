@@ -64,7 +64,7 @@ CASE_API_KEY=sk_case_your_api_key_here
 # Then copy the https URL here
 CLOUD_URL=https://your-tunnel-url.trycloudflare.com
 
-# Demo limits (optional - defaults shown)
+# Demo limits
 NEXT_PUBLIC_DEMO_SESSION_HOURS=24
 NEXT_PUBLIC_DEMO_SESSION_PRICE_LIMIT=5
 ```
