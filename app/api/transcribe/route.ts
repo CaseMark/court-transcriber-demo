@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { transcribeAudioUrl } from '@/lib/case-dev/client';
 import { LEGAL_VOCABULARY } from '@/lib/case-dev/legal-vocabulary';
-import { storeAudioFile, getAudioFileUrl } from '@/lib/audio-store';
+import { storeAudioFile, deleteAudioFile, validateAudioStoreConfig } from '@/lib/audio-store';
 import type { DemoUsage } from '@/lib/usage/types';
 import { VOICE_API_PRICE_PER_SECOND, getUsageLimits, getSessionDurationMs } from '@/lib/usage/config';
 
@@ -126,11 +126,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.CLOUD_URL && !process.env.VERCEL_URL) {
-      return NextResponse.json(
-        { error: 'CLOUD_URL is not configured. Run: cloudflared tunnel --url http://localhost:3000' },
-        { status: 500 }
-      );
+    // Validate file storage configuration
+    const configCheck = validateAudioStoreConfig();
+    if (!configCheck.valid) {
+      return NextResponse.json({ error: configCheck.error }, { status: 500 });
     }
 
     console.log(`[Transcribe] Processing file: ${file.name} (${file.size} bytes, type: ${file.type})`);
@@ -163,9 +162,8 @@ export async function POST(request: NextRequest) {
       mimeType = mimeMap[ext || ''] || 'audio/mpeg';
     }
 
-    storeAudioFile(fileId, buffer, mimeType, file.name);
-
-    const audioUrl = getAudioFileUrl(fileId);
+    // Store file and get public URL
+    const audioUrl = await storeAudioFile(fileId, buffer, mimeType, file.name);
     console.log(`[Transcribe] Audio URL: ${audioUrl}`);
 
     // Call Case.dev API
@@ -173,6 +171,11 @@ export async function POST(request: NextRequest) {
       speakerLabels: true,
       vocabularyBoost: LEGAL_VOCABULARY,
     });
+
+    // Clean up file after processing (only for Vercel Blob in production)
+    if (process.env.BLOB_READ_WRITE_TOKEN && audioUrl) {
+      await deleteAudioFile(fileId, audioUrl);
+    }
 
     // Calculate usage for this transcription
     const audioDurationSeconds = result.duration || 0;
