@@ -1,13 +1,13 @@
 export function CaseDevFooter() {
   return (
-    <footer className="w-full border-t border-neutral-200 dark:border-neutral-800 py-6 mt-auto">
-      <div className="container mx-auto flex items-center justify-center gap-2 text-sm text-neutral-500">
+    <footer className="w-full border-t py-6 mt-auto">
+      <div className="container mx-auto flex items-center justify-center gap-2 text-sm text-muted-foreground">
         <span>Powered by</span>
         <a
           href="https://case.dev"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 font-medium text-neutral-900 dark:text-neutral-100 hover:underline"
+          className="inline-flex items-center gap-1.5 font-medium text-foreground hover:underline"
         >
           <svg width="18" height="18" viewBox="0 0 144 144" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M127.927 56.3865C127.927 54.7298 126.583 53.3867 124.927 53.3865H19.6143C17.9574 53.3865 16.6143 54.7296 16.6143 56.3865V128.226C16.6143 129.883 17.9574 131.226 19.6143 131.226H124.927C126.583 131.226 127.927 129.883 127.927 128.226V56.3865ZM93.1553 32.6638C93.1553 31.007 91.8121 29.6639 90.1553 29.6638H53.4102C51.7534 29.664 50.4102 31.0071 50.4102 32.6638V47.3865H93.1553V32.6638ZM99.1553 47.3865H124.927C129.897 47.3867 133.927 51.4161 133.927 56.3865V128.226C133.927 133.197 129.897 137.226 124.927 137.226H19.6143C14.6437 137.226 10.6143 133.197 10.6143 128.226V56.3865C10.6143 51.4159 14.6437 47.3865 19.6143 47.3865H44.4102V32.6638C44.4102 27.6933 48.4397 23.664 53.4102 23.6638H90.1553C95.1258 23.6639 99.1553 27.6933 99.1553 32.6638V47.3865Z" fill="#EB5600"/>
