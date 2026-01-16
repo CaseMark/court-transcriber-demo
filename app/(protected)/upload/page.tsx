@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useUsage } from '@/lib/usage/usage-context';
 import { LimitExceededDialog } from '@/components/demo';
+import { uploadAudioFile, type UploadProgress } from '@/lib/upload-client';
 import {
   saveRecording,
   updateRecordingStatus,
@@ -40,41 +41,6 @@ function getFileType(mimeType: string): FileTypeKey {
     'audio/ogg': 'ogg',
   };
   return typeMap[mimeType] || 'mp3';
-}
-
-/**
- * Sanitize filename to ASCII-only characters
- * This works around a Next.js bug where non-ASCII filenames cause FormData parsing to fail
- * @see https://github.com/vercel/next.js/issues/76893
- */
-function sanitizeFilename(filename: string): string {
-  // Get the extension
-  const lastDot = filename.lastIndexOf('.');
-  const ext = lastDot > 0 ? filename.slice(lastDot) : '';
-  const name = lastDot > 0 ? filename.slice(0, lastDot) : filename;
-
-  // Replace non-ASCII and problematic characters with underscores
-  const sanitized = name
-    .normalize('NFD') // Decompose accented characters
-    .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
-    .replace(/[^\x00-\x7F]/g, '_') // Replace non-ASCII with underscore
-    .replace(/[<>:"/\\|?*\s]/g, '_') // Replace problematic chars and spaces
-    .replace(/_+/g, '_') // Collapse multiple underscores
-    .replace(/^_|_$/g, ''); // Trim leading/trailing underscores
-
-  return (sanitized || 'audio_file') + ext;
-}
-
-/**
- * Create a new File with a sanitized filename
- */
-function createSanitizedFile(file: File): File {
-  const sanitizedName = sanitizeFilename(file.name);
-  if (sanitizedName === file.name) {
-    return file; // No change needed
-  }
-  console.log(`[Upload] Sanitized filename: "${file.name}" -> "${sanitizedName}"`);
-  return new File([file], sanitizedName, { type: file.type });
 }
 
 export default function UploadPage() {
@@ -159,7 +125,7 @@ export default function UploadPage() {
     }
 
     setUploadState('uploading');
-    setProgress(10);
+    setProgress(0);
 
     try {
       // Create recording record
@@ -178,22 +144,24 @@ export default function UploadPage() {
       };
 
       await saveRecording(recording);
-      setProgress(20);
+
+      // Step 1: Upload file directly to Vercel Blob (bypasses 4.5MB limit)
+      const { url: audioUrl } = await uploadAudioFile(file, (uploadProgress) => {
+        // Upload progress is 0-50% of total progress
+        setProgress(Math.round(uploadProgress.percentage * 0.5));
+      });
+
+      console.log('[Upload] File uploaded to blob:', audioUrl);
 
       // Update status to processing
       await updateRecordingStatus(recordingId, 'processing');
       setUploadState('transcribing');
-      setProgress(30);
+      setProgress(55);
 
-      // Call transcription API
-      // Sanitize filename to work around Next.js FormData parsing bug with non-ASCII chars
-      const sanitizedFile = createSanitizedFile(file);
-      const formData = new FormData();
-      formData.append('file', sanitizedFile);
-      formData.append('recordingId', recordingId);
-
-      // Include usage data in request headers for server-side validation
-      const headers: HeadersInit = {};
+      // Step 2: Send blob URL to transcription API
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
       if (usage) {
         headers['X-Demo-Usage'] = JSON.stringify(usage);
       }
@@ -201,10 +169,13 @@ export default function UploadPage() {
       const response = await fetch('/api/transcribe', {
         method: 'POST',
         headers,
-        body: formData,
+        body: JSON.stringify({
+          audioUrl,
+          filename: file.name,
+        }),
       });
 
-      setProgress(70);
+      setProgress(75);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Transcription failed' }));

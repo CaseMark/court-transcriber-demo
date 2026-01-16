@@ -13,6 +13,7 @@ import {
   updateTranscriptSegment,
   replaceTranscriptSegments,
   addSpeaker as addSpeakerToStorage,
+  updateRecordingName,
 } from '@/lib/storage';
 import { getSpeakerColor as getDefaultSpeakerColor, getSpeakerLabel as getDefaultSpeakerLabel } from '@/lib/case-dev/legal-vocabulary';
 import {
@@ -144,6 +145,10 @@ export default function RecordingPage() {
   // New speaker creation in sidebar
   const [isAddingSpeaker, setIsAddingSpeaker] = useState(false);
   const [newSpeakerName, setNewSpeakerName] = useState('');
+
+  // Recording name editing
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingNameValue, setEditingNameValue] = useState('');
 
   // Export preview state
   const [exportPreview, setExportPreview] = useState<ExportPreviewData | null>(null);
@@ -841,6 +846,26 @@ export default function RecordingPage() {
     }
   };
 
+  // Recording name editing
+  const startEditingName = () => {
+    if (!recording) return;
+    setEditingNameValue(recording.name);
+    setIsEditingName(true);
+  };
+
+  const saveNameEdit = async () => {
+    if (!recording || !editingNameValue.trim()) return;
+    await updateRecordingName(recording.id, editingNameValue.trim());
+    setRecording({ ...recording, name: editingNameValue.trim() });
+    setIsEditingName(false);
+    setEditingNameValue('');
+  };
+
+  const cancelNameEdit = () => {
+    setIsEditingName(false);
+    setEditingNameValue('');
+  };
+
   // Get speaker color
   const getSpeakerColor = useCallback(
     (speakerId: string) => {
@@ -963,7 +988,47 @@ export default function RecordingPage() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-xl font-semibold leading-tight">{recording.name}</h1>
+              {isEditingName ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={editingNameValue}
+                    onChange={(e) => setEditingNameValue(e.target.value)}
+                    className="h-8 text-lg font-semibold w-64"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveNameEdit();
+                      if (e.key === 'Escape') cancelNameEdit();
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={saveNameEdit}
+                  >
+                    <Check className="h-4 w-4 text-green-600" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={cancelNameEdit}
+                  >
+                    <X className="h-4 w-4 text-red-600" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group">
+                  <h1 className="text-xl font-semibold leading-tight">{recording.name}</h1>
+                  <button
+                    onClick={startEditingName}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-muted rounded"
+                    title="Edit transcription name"
+                  >
+                    <Pencil className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
+              )}
               <p className="text-sm text-muted-foreground leading-tight">
                 {formatTime(duration || recording.duration || 0)} total
               </p>

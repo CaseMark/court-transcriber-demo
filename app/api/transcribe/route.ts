@@ -1,20 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { del } from '@vercel/blob';
 import { transcribeAudioUrl } from '@/lib/case-dev/client';
 import { LEGAL_VOCABULARY } from '@/lib/case-dev/legal-vocabulary';
-import { storeAudioFile, deleteAudioFile, validateAudioStoreConfig } from '@/lib/audio-store';
 import type { DemoUsage } from '@/lib/usage/types';
 import { VOICE_API_PRICE_PER_SECOND, getUsageLimits, getSessionDurationMs } from '@/lib/usage/config';
 
 /**
  * Transcription API Route
  *
- * Handles audio transcription via Case.dev API using cloudflared for public URL.
+ * Handles audio transcription via Case.dev API.
+ * Accepts a Vercel Blob URL (uploaded client-side) instead of file upload
+ * to bypass the 4.5MB Vercel serverless function limit.
+ *
  * Includes demo usage limit enforcement.
  */
 
-// Route segment config for large file uploads
+// Route segment config
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minutes for transcription
+
+interface TranscribeRequest {
+  audioUrl: string;      // The Vercel Blob URL from client upload
+  filename?: string;     // Original filename for metadata
+  deleteAfter?: boolean; // Whether to delete the blob after transcription (default: true)
+}
 
 /**
  * Check if demo usage limits are exceeded
@@ -74,47 +83,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse FormData with explicit error handling for large files
-    let formData: FormData;
+    // Parse JSON body
+    let body: TranscribeRequest;
     try {
-      formData = await request.formData();
+      body = await request.json();
     } catch (parseError) {
-      console.error('[Transcribe] FormData parse error:', parseError);
+      console.error('[Transcribe] JSON parse error:', parseError);
       return NextResponse.json(
-        { error: 'Failed to parse upload. File may be too large or upload was interrupted.' },
+        { error: 'Invalid request body' },
         { status: 400 }
       );
     }
 
-    const file = formData.get('file') as File | null;
-    const recordingId = formData.get('recordingId') as string | null;
+    const { audioUrl, filename, deleteAfter = true } = body;
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    // Validate audioUrl
+    if (!audioUrl || typeof audioUrl !== 'string') {
+      return NextResponse.json(
+        { error: 'audioUrl is required' },
+        { status: 400 }
+      );
     }
 
-    // Validate file type - check both MIME type and extension
-    const allowedTypes = [
-      'audio/mpeg',
-      'audio/mp3',
-      'audio/wav',
-      'audio/wave',
-      'audio/x-wav',
-      'audio/m4a',
-      'audio/mp4',
-      'audio/x-m4a',
-      'audio/webm',
-      'audio/ogg',
-      'application/octet-stream', // Allow generic binary if extension matches
-    ];
-
-    const allowedExtensions = /\.(mp3|wav|m4a|webm|ogg)$/i;
-    const hasValidType = allowedTypes.includes(file.type);
-    const hasValidExtension = allowedExtensions.test(file.name);
-
-    if (!hasValidType && !hasValidExtension) {
+    if (!audioUrl.startsWith('https://')) {
       return NextResponse.json(
-        { error: 'Invalid file type. Supported formats: MP3, WAV, M4A, WebM, OGG' },
+        { error: 'audioUrl must be a valid HTTPS URL' },
+        { status: 400 }
+      );
+    }
+
+    // Validate it's a Vercel Blob URL (security check)
+    if (!audioUrl.includes('.public.blob.vercel-storage.com/')) {
+      return NextResponse.json(
+        { error: 'audioUrl must be a Vercel Blob URL' },
         { status: 400 }
       );
     }
@@ -126,55 +127,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file storage configuration
-    const configCheck = validateAudioStoreConfig();
-    if (!configCheck.valid) {
-      return NextResponse.json({ error: configCheck.error }, { status: 500 });
-    }
+    console.log(`[Transcribe] Processing audio URL: ${audioUrl}${filename ? ` (${filename})` : ''}`);
 
-    console.log(`[Transcribe] Processing file: ${file.name} (${file.size} bytes, type: ${file.type})`);
-
-    // Store file in memory
-    const fileId = recordingId || crypto.randomUUID();
-
-    let buffer: ArrayBuffer;
-    try {
-      buffer = await file.arrayBuffer();
-    } catch (bufferError) {
-      console.error('[Transcribe] Buffer read error:', bufferError);
-      return NextResponse.json(
-        { error: 'Failed to read file data. Please try uploading again.' },
-        { status: 400 }
-      );
-    }
-
-    // Detect MIME type from extension if not provided or generic
-    let mimeType = file.type;
-    if (!mimeType || mimeType === 'application/octet-stream') {
-      const ext = file.name.toLowerCase().split('.').pop();
-      const mimeMap: Record<string, string> = {
-        mp3: 'audio/mpeg',
-        wav: 'audio/wav',
-        m4a: 'audio/mp4',
-        webm: 'audio/webm',
-        ogg: 'audio/ogg',
-      };
-      mimeType = mimeMap[ext || ''] || 'audio/mpeg';
-    }
-
-    // Store file and get public URL
-    const audioUrl = await storeAudioFile(fileId, buffer, mimeType, file.name);
-    console.log(`[Transcribe] Audio URL: ${audioUrl}`);
-
-    // Call Case.dev API
+    // Call Case.dev API with the blob URL
     const result = await transcribeAudioUrl(audioUrl, {
       speakerLabels: true,
       vocabularyBoost: LEGAL_VOCABULARY,
     });
 
-    // Clean up file after processing (only for Vercel Blob in production)
-    if (process.env.BLOB_READ_WRITE_TOKEN && audioUrl) {
-      await deleteAudioFile(fileId, audioUrl);
+    // Clean up: delete the blob after transcription if requested
+    if (deleteAfter) {
+      try {
+        await del(audioUrl);
+        console.log('[Transcribe] Deleted blob:', audioUrl);
+      } catch (e) {
+        console.warn('[Transcribe] Failed to delete blob:', e);
+        // Don't fail the request if cleanup fails
+      }
     }
 
     // Calculate usage for this transcription

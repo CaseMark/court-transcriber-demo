@@ -101,14 +101,14 @@ function exportToText(
   content += `${divider}\n\n`;
 
   // Title
-  content += `TRANSCRIPT\n`;
-  content += `${recording.name}\n`;
+  content += `${recording.name} Transcription\n`;
+  content += `${recording.fileName}\n`;
   content += `Duration: ${formatDuration(recording.duration)}\n\n`;
 
   // Speakers List
   content += `SPEAKERS:\n`;
   speakers.forEach((speaker, index) => {
-    content += `  ${index + 1}. ${speaker.label}\n`;
+    content += `${index + 1}. ${speaker.label}\n`;
   });
   content += `\n${divider}\n\n`;
 
@@ -170,6 +170,7 @@ async function exportToWord(
         }),
         new TextRun({
           text: '\t',
+          font: FONT_FAMILY,
         }),
         new TextRun({
           text: formatDate(recording.uploadedAt),
@@ -202,7 +203,7 @@ async function exportToWord(
     new Paragraph({
       children: [
         new TextRun({
-          text: 'TRANSCRIPT',
+          text: `${recording.name} Transcription`,
           bold: true,
           size: FONT_SIZE_TITLE * 2,
           font: FONT_FAMILY,
@@ -213,12 +214,12 @@ async function exportToWord(
     })
   );
 
-  // Recording Name - centered
+  // Original File Name (subtitle) - centered
   children.push(
     new Paragraph({
       children: [
         new TextRun({
-          text: recording.name,
+          text: recording.fileName,
           size: FONT_SIZE_BODY * 2,
           font: FONT_FAMILY,
         }),
@@ -271,7 +272,6 @@ async function exportToWord(
           }),
         ],
         spacing: { after: 60 },
-        indent: { left: convertInchesToTwip(0.25) },
       })
     );
   });
@@ -389,6 +389,7 @@ async function exportToWord(
         }),
         new TextRun({
           text: '\t',
+          font: FONT_FAMILY,
         }),
         new TextRun({
           text: `Generated: ${new Date().toLocaleDateString()}`,
@@ -408,6 +409,16 @@ async function exportToWord(
   );
 
   const doc = new Document({
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: FONT_FAMILY,
+            size: FONT_SIZE_BODY * 2,
+          },
+        },
+      },
+    },
     sections: [
       {
         properties: {
@@ -498,13 +509,13 @@ async function exportToPdf(
   doc.setFontSize(FONT_SIZE_TITLE);
   doc.setFont('times', 'bold');
   doc.setTextColor(colors.title);
-  doc.text('TRANSCRIPT', pageWidth / 2, y, { align: 'center' });
+  doc.text(`${recording.name} Transcription`, pageWidth / 2, y, { align: 'center' });
   y += 20;
 
-  // Recording Name
+  // Original File Name (subtitle)
   doc.setFontSize(FONT_SIZE_BODY);
   doc.setFont('times', 'normal');
-  doc.text(recording.name, pageWidth / 2, y, { align: 'center' });
+  doc.text(recording.fileName, pageWidth / 2, y, { align: 'center' });
   y += 16;
 
   // Duration
@@ -522,7 +533,7 @@ async function exportToPdf(
   doc.setFont('times', 'normal');
   doc.setTextColor(colors.body);
   speakers.forEach((speaker, index) => {
-    doc.text(`${index + 1}. ${speaker.label}`, marginLeft + 18, y);
+    doc.text(`${index + 1}. ${speaker.label}`, marginLeft, y);
     y += lineHeight * 0.8;
   });
 
@@ -672,13 +683,13 @@ function generateDocxHtmlPreview(
       </div>
 
       <!-- Title -->
-      <h1 style="text-align: center; font-size: 12pt; font-weight: bold; margin: 20px 0 10px 0;">TRANSCRIPT</h1>
-      <p style="text-align: center; margin: 0 0 10px 0;">${recording.name}</p>
+      <h1 style="text-align: center; font-size: 12pt; font-weight: bold; margin: 20px 0 10px 0;">${recording.name} Transcription</h1>
+      <p style="text-align: center; margin: 0 0 10px 0;">${recording.fileName}</p>
       <p style="text-align: center; color: #666; margin: 0 0 30px 0;">Duration: ${formatDuration(recording.duration)}</p>
 
       <!-- Speakers -->
       <p style="font-weight: bold; margin: 0 0 10px 0;">SPEAKERS</p>
-      <div style="margin-left: 18px; margin-bottom: 20px;">
+      <div style="margin-bottom: 20px;">
         ${speakers.map((speaker, index) => `<p style="margin: 5px 0;">${index + 1}. ${speaker.label}</p>`).join('')}
       </div>
 

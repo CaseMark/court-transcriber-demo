@@ -109,6 +109,25 @@ export async function updateRecordingStatus(
 }
 
 /**
+ * Update recording name
+ */
+export async function updateRecordingName(
+  id: string,
+  name: string
+): Promise<boolean> {
+  if (!isBrowser()) return false;
+
+  try {
+    const db = getDatabase();
+    await db.recordings.update(id, { name });
+    return true;
+  } catch (error) {
+    console.error('[Storage] Failed to update recording name:', error);
+    return false;
+  }
+}
+
+/**
  * Delete a recording and all associated data
  */
 export async function deleteRecording(id: string): Promise<boolean> {

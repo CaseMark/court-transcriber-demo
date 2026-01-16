@@ -7,7 +7,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { listRecordings, deleteRecording } from '@/lib/storage';
+import { listRecordings, deleteRecording, updateRecordingName } from '@/lib/storage';
 import type { Recording } from '@/types/recording';
 import {
   Plus,
@@ -19,6 +19,9 @@ import {
   Spinner,
   Warning,
   FolderOpen,
+  Pencil,
+  Check,
+  X,
 } from '@phosphor-icons/react';
 
 function formatDuration(seconds: number): string {
@@ -85,6 +88,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
 
   useEffect(() => {
     async function loadRecordings() {
@@ -108,6 +113,30 @@ export default function DashboardPage() {
     await deleteRecording(id);
     setRecordings((prev) => prev.filter((r) => r.id !== id));
     setDeletingId(null);
+  };
+
+  const startEditing = (recording: Recording, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingId(recording.id);
+    setEditingName(recording.name);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !editingName.trim()) return;
+
+    await updateRecordingName(editingId, editingName.trim());
+    setRecordings((prev) =>
+      prev.map((r) =>
+        r.id === editingId ? { ...r, name: editingName.trim() } : r
+      )
+    );
+    setEditingId(null);
+    setEditingName('');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingName('');
   };
 
   return (
@@ -183,12 +212,52 @@ export default function DashboardPage() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <button
-                      onClick={() => router.push(`/recording/${recording.id}`)}
-                      className="text-left hover:underline"
-                    >
-                      <h3 className="font-medium truncate">{recording.name}</h3>
-                    </button>
+                    {editingId === recording.id ? (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="h-8 text-sm font-medium"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveEdit();
+                            if (e.key === 'Escape') cancelEdit();
+                          }}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 flex-shrink-0"
+                          onClick={saveEdit}
+                        >
+                          <Check className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 flex-shrink-0"
+                          onClick={cancelEdit}
+                        >
+                          <X className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 group/name">
+                        <button
+                          onClick={() => router.push(`/recording/${recording.id}`)}
+                          className="text-left hover:underline"
+                        >
+                          <h3 className="font-medium truncate">{recording.name}</h3>
+                        </button>
+                        <button
+                          onClick={(e) => startEditing(recording, e)}
+                          className="opacity-0 group-hover/name:opacity-100 transition-opacity p-1 hover:bg-muted rounded"
+                          title="Edit name"
+                        >
+                          <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 text-sm text-muted-foreground mt-0.5">
                       <span>{formatDate(recording.uploadedAt)}</span>
                       <span className="hidden md:inline">
